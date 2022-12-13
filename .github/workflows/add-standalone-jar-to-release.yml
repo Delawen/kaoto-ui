@@ -1,6 +1,7 @@
 name: 👩‍💻 Add Standalone Jar to Release
 
 on:
+  workflow_dispatch:
   release:
     types: [published]
 
@@ -18,30 +19,31 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           scope: '@kaoto'
       - name: 🛸 Build Frontend
-        run: yarn install --mode=skip-build && KAOTO_API="" yarn run build
+      - run: yarn install && yarn build
       - name: 📩 Save dist folder
         uses: actions/upload-artifact@v3
         with:
           name: dist
-          path: /app/kaoto-ui/dist/
+          path: /dist/
           retention-days: 1
 
   build-standalone-jar:
     name: 👩‍🏭 Build standalone jar
     runs-on: ubuntu-latest
+    needs: build-frontend
     steps:
       - name: 🛂 Find the right frontend major and minor version
         run: 'echo "frontend_version=${{ env.release.tag_name }}" | sed -En "s/v([0-9]+\.)([0-9]+\.)?([0-9]+)/v\1\2/p" >> $GITHUB_ENV'
-      - name: 🛃 Find the right backend version
-        run: 'echo "backend_version=$(git tag --list | grep ${{ env.frontend_version }} | tail -n 1)" >> $GITHUB_ENV'
-      - name: 🛃 Find the version based on code
-        run: 'echo "api_version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV'
       - name: 🚟 Checkout backend
         uses: actions/checkout@v3
         with:
           repository: 'KaotoIO/kaoto-backend'
-          ref: '${{ env.backend_version }}'
-          path: 'backend'
+      - name: 🛃 Find the right backend version
+        run: 'echo "backend_version=$(git tag --list | grep ${{ env.frontend_version }} | tail -n 1)" >> $GITHUB_ENV'
+      - name: 🛂 Checkout the right backend version
+        run: 'git checkout ${{ env.backend_version }}'
+      - name: 🛃 Find the version based on code
+        run: 'echo "api_version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV'
       - name: 🚧 Remove default html resources
         run: 'rm -r api/src/main/resources/META-INF/resources/'
       - name: 📨 Retrieve saved dist folder
@@ -76,7 +78,9 @@ jobs:
   build-native:
     name: 👩🏼‍🏭 Build Native Quarkus for ${{ matrix.os }} 👩🏼‍🏭
     runs-on: ${{ matrix.os }}
+    needs: build-frontend
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -91,16 +95,16 @@ jobs:
     steps:
       - name: 🛂 Find the right frontend major and minor version
         run: 'echo "frontend_version=${{ env.release.tag_name }}" | sed -En "s/v([0-9]+\.)([0-9]+\.)?([0-9]+)/v\1\2/p" >> $GITHUB_ENV'
-      - name: 🛃 Find the right backend version
-        run: 'echo "backend_version=$(git tag --list | grep ${{ env.frontend_version }} | tail -n 1)" >> $GITHUB_ENV'
-      - name: 🛃 Find the version based on code
-        run: 'echo "api_version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV'
       - name: 🚟 Checkout backend
         uses: actions/checkout@v3
         with:
           repository: 'KaotoIO/kaoto-backend'
-          ref: '${{ env.backend_version }}'
-          path: 'backend'
+      - name: 🛃 Find the right backend version
+        run: 'echo "backend_version=$(git tag --list | grep ${{ env.frontend_version }} | tail -n 1)" >> $GITHUB_ENV'
+      - name: 🛂 Checkout the right backend version
+        run: 'git checkout ${{ env.backend_version }}'
+      - name: 🛃 Find the version based on code
+        run: 'echo "api_version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV'
       - name: 🚧 Remove default html resources
         run: 'rm -r api/src/main/resources/META-INF/resources/'
       - name: 📨 Retrieve saved dist folder
